@@ -1,161 +1,252 @@
-# Maply
+# Maply: An Enhanced MapQuest Route Analyzer with Webex Notifications
 
-Maply turns the original GraphHopper-powered command-line route finder into a responsive Metro Manila route planner. Search for places, plan driving/cycling/walking routes, compare profile availability, review turn-by-turn directions, and estimate driving fuel costs. Serves as Final Exam Project for CCNA DevNet Associate
+**An Alternative Final Exam Project**
+presented to the Department of Information Technology,
+College of Information and Computing Sciences, University of Santo Tomas,
+in partial fulfilment of the requirements in the course
+**IT26210 – System Integration and Architecture**
 
-## Features
+**Section 4ITG – Group 2**
 
-- GraphHopper geocoding suggestions and routing with real route geometry.
-- Built for Metro Manila: place search only suggests places in Metro Manila, and routes must start and end there.
-- Car, bike, and foot routing profiles, plus Commute mode. The app reports unavailable profiles without substituting another mode.
-- Commute mode (OpenAI with web search): jeepney, bus (including the EDSA Carousel and P2P), UV Express, tricycle and LRT/MRT trips found in commuter guides on the web, with where to board and get off, signboard tips, times, transfers, walking and approximate fares, plus the sources used. LRT/MRT legs are checked against real station data (positions, direction, time and fare), and jeepney, bus and walking legs are drawn along real roads with GraphHopper (up to 12 requests per new search). Results appear after about 30 seconds while the other modes show right away, and are cached for a day.
-- Built-in LRT/MRT planner when no OpenAI key is set (or the web search finds nothing usable): plans LRT-1, LRT-2 and MRT-3 trips (walk to the best station, ride, transfer at EDSA/Taft, Doroteo Jose/Recto or Cubao, walk to the destination) with estimated times and approximate fares, offline and free. Station data comes from OpenStreetMap; refresh it with `python scripts/build_rail_data.py`.
-- Interactive Mapbox GL JS map with Mapbox Standard and satellite styles, route line, start/end markers, current-location control, and route bounds.
-- Route distance, estimated duration, and turn-by-turn instructions.
-- Mode comparison with per-profile error reporting.
-- Alternative routes: up to three routes for the chosen mode, labelled by their main road (e.g. "via Taft Avenue"), shown in a list and as grey lines you can tap on the map.
-- Metric/imperial display preference saved in this browser.
-- Driving fuel estimate in PHP, with editable price and km/L efficiency.
-- Weather planning (OpenWeatherMap): pick when to leave (now, later today, tomorrow or any time in the next 5 days) and see the weather when you leave and arrive, rain and heat advice for your travel mode (using PAGASA heat index bands), a suggested drier departure time, a 3-hourly forecast, and rain tags on Walk and Cycle.
-- Saved places: star a start or destination to save it as Home, Work, School or a named place. Saved places appear when you tap an empty search box and can be used as a start or destination in one tap.
-- Trip history: the last 50 trips with mode, distance and time, grouped by day, with search, weekly totals, one-tap re-planning and delete/clear.
-- Saved places and history are stored in this browser's `localStorage`; no account or database required.
-- Responsive mobile bottom sheet and desktop route-planning sidebar.
+| Member | Scrum Role | Project Role |
+|---|---|---|
+| Adriano, Joaquin Miguel A. | Scrum Leader; Developer | Project Lead / Repository Manager |
+| Benico, Lance Aidrian F. | Developer | Frontend / UI Designer |
+| Cabanada, Kristine Y. | Recorder; Developer | QA Tester / Documentation Lead |
+| Chua, Warren V. | Developer | Backend / API Developer |
 
-## Technology
+**Instructor:** Asst. Prof. Mike C. Victorio
+**Date:** December 2026
 
-Python 3, Flask, Requests, Python-dotenv, vanilla JavaScript, Tailwind CSS CDN, Mapbox GL JS, Lucide, and GraphHopper Directions API.
+---
 
-## Clone, configure, and run
+## Abstract
 
-### 1. Install the prerequisites
+Maply extends the MapQuest route script of Laboratory 4.9.2, *Integrate a REST API in a Python Application*, of the Cisco Networking Academy DevNet curriculum into a Flask-based web application for trip planning in Metro Manila. The original script runs only in a command-line terminal, prints unformatted text, processes one trip at a time, and keeps its results on the machine of the person who ran it. Maply addresses these limitations by analyzing routes with the MapQuest Directions API, presenting the results in color-coded tables in either metric or English units, enriching each trip with a weather forecast, and posting a formatted trip summary automatically to a Webex Teams room. The application was developed by a team of four over four one-week Scrum sprints, using GitHub feature branches and reviewed pull requests, automated Python and JavaScript unit tests, and a continuous integration pipeline that runs the test suite on every push and pull request.
 
-Install Git and Python 3.10 or newer. On Windows, install the Python launcher (`py`) with Python. You also need internet access because the application calls GraphHopper and loads Mapbox map tiles and frontend libraries from public CDNs.
+## 1. Objectives
 
-You will need these API credentials:
+### 1.1 Problem Statement
 
-- A GraphHopper API key that has Geocoding and Routing access. Available travel profiles depend on the account.
-- A Mapbox **public** access token (starts with `pk.`) that can load styles and tiles. Restrict its allowed URLs to localhost for development.
-- An OpenWeatherMap API key (the free plan is enough) for weather planning. Without it, everything else works and the Weather card explains how to add it. New keys can take up to 2 hours to activate.
-- An OpenAI API key for Commute mode (`OPENAI_API_KEY`). Each new commute search is one OpenAI request with web search, which costs a little; answers are cached for a day, each user is rate-limited, and `COMMUTE_DAILY_LIMIT` (default 200) caps searches per day. `OPENAI_MODEL` picks the model (default `gpt-5.4-mini`). Without a key, Commute uses Maply's built-in LRT/MRT planner (trains only, estimated times and fares).
+The Laboratory 4.9.2 script demonstrates how a Python program requests route data from a Representational State Transfer (REST) Application Programming Interface (API) and parses the JavaScript Object Notation (JSON) response. However, its output is difficult to read at a glance, and any route information that a group needs must be copied manually into a chat or an email. The team's existing web application already provided an interactive Mapbox GL JS map and GraphHopper routing, but it did not use the MapQuest Directions API covered in the course, did not present route data in tabular form, offered no weather context, and could not share results with other people. Furthermore, users in the Philippines work primarily in metric units, whereas the MapQuest API defaults to miles. The project therefore addresses the need for a single application that analyzes a route, presents the results clearly in the user's preferred unit system, adds weather context for trip planning, and delivers a summary automatically to the people who need it.
 
-The credentials enable real place search, routes, and map tiles; the application does not include mock route data.
+### 1.2 General Objective
 
-### 2. Clone the repository
+To develop Maply, a Flask-based web application that analyzes routes from the MapQuest Directions API, presents the results in a colored, table-based interface with user-selectable metric or English units, and automatically sends trip summaries to a Webex Teams room, while applying Agile/Scrum practices, GitHub social coding, Python unit testing, and a continuous integration pipeline.
 
-In PowerShell, Terminal, or another shell, run:
+### 1.3 Specific Objectives
 
-```sh
+1. To integrate the MapQuest Directions API version 2 route endpoint into the Flask back end over HTTPS, returning the distance, estimated travel time, fuel use where reported, and turn-by-turn maneuvers in metric (kilometers, liters) or English (miles, US gallons) units.
+2. To present every route analysis in a colored, table-based web interface alongside the existing Mapbox GL JS map, enriched with a weather forecast for the departure and arrival times.
+3. To post a formatted trip summary to a designated Webex Teams room through the Webex Messages API after every successful route analysis, and to allow team members to request a trip summary from a Webex bot.
+4. To implement automated unit tests with Python's `unittest` and `unittest.mock` frameworks that cover unit conversion, API response parsing, error handling, and Webex message formatting.
+5. To establish a continuous integration pipeline that runs the complete test suite on every commit and pull request, and to route every code change through a feature branch and a reviewed pull request.
+
+## 2. Scope and Limitations
+
+### 2.1 Scope
+
+- **Route analysis:** the MapQuest Directions API (`GET /directions/v2/route`) as the primary route analyzer, with the `unit` parameter set according to the user's choice.
+- **Place search and mode comparison:** the GraphHopper Geocoding and Routing APIs, retained from the existing application for place suggestions within Metro Manila and for comparing car, bike, and foot routes, including up to three alternative routes per mode.
+- **Commute planning:** jeepney, bus, UV Express, tricycle, and LRT/MRT trips found through the OpenAI API with web search, validated against OpenStreetMap rail station data, with a built-in offline LRT-1, LRT-2, and MRT-3 planner as a fallback.
+- **Weather:** the OpenWeatherMap current weather and five-day, three-hour forecast APIs for departure and arrival conditions, with rain and heat advice based on PAGASA heat index bands.
+- **Notification:** the Webex Messages API for automatic trip summaries, and a Webex bot that answers @mentions such as "Cubao to Makati" through a signed webhook.
+- **User interface:** a responsive web interface with a desktop sidebar and a mobile bottom sheet, color-coded summary and directions tables, a Metric/English toggle, a driving fuel estimate in Philippine pesos (PHP), saved places, and trip history stored in the browser's `localStorage`.
+- **Development practices:** Scrum with four one-week sprints (November 13 to December 10, 2026), a shared GitHub repository, feature branches with reviewed pull requests, and a GitHub Actions continuous integration workflow.
+
+### 2.2 Limitations
+
+- **Laboratory environment only.** The application runs on the Flask development server at `http://127.0.0.1:5000` and is not deployed to a public production host. External API calls use HTTPS, but the local application is served over plain HTTP.
+- **Lab-grade secrets handling.** API keys and the Webex token are stored in a local `.env` file excluded from version control, not in a dedicated secrets manager. Webex personal access tokens expire after 12 hours; a bot token is therefore recommended.
+- **Free-tier API limits.** MapQuest, GraphHopper, OpenWeatherMap, OpenAI, and Mapbox each impose quotas or charges. The application applies per-client rate limits and caching, but heavy use may still exhaust a free plan.
+- **No accounts or server database.** Saved places, trip history, and unit preferences are stored only in the current browser and are not synchronized across devices.
+- **Estimates only.** Fuel estimates are computed from route distance and user-supplied efficiency and price values; they exclude tolls, traffic, parking, and vehicle load. Commute fares and times are approximate.
+- **Geographic scope.** Place search and routing are restricted to Metro Manila.
+- **Continuous integration only.** The pipeline automates linting and testing, but automated deployment to a hosted environment is not implemented.
+- **Test coverage.** Unit tests mock all external services; no automated end-to-end browser tests were written, and live API behavior was verified manually.
+
+## 3. System Architecture
+
+Maply follows a three-tier architecture made up of a browser client, a Flask application server, and a set of external REST APIs.
+
+- **Client tier:** HTML, Tailwind CSS, and vanilla JavaScript (`templates/`, `static/`), with an interactive map rendered by Mapbox GL JS. The client never calls the routing, weather, or messaging services directly; it sends JSON requests to the Flask endpoints.
+- **Application tier:** Flask routes (`routes/api.py`, `routes/webex.py`) delegate to dedicated service modules in `services/` for MapQuest, GraphHopper, weather, commute planning, rail data, unit conversion, and Webex. Every module reads its credentials from the `.env` file through `python-dotenv`, so no secret except the public Mapbox token reaches the browser.
+- **External tier:** MapQuest, GraphHopper, OpenWeatherMap, OpenAI, Webex, and Mapbox, all reached over HTTPS.
+
+### 3.1 Application Endpoints
+
+| Endpoint | Method | Purpose | External Service Called |
+|---|---|---|---|
+| `/api/geocode` | GET | Returns up to five Metro Manila place suggestions. | GraphHopper Geocoding |
+| `/api/route` | POST | Calculates a route for the selected car, bike, or foot profile, with fuel estimate. | GraphHopper Routing |
+| `/api/compare` | POST | Compares car, bike, and foot routes concurrently and reports unavailable profiles. | GraphHopper Routing |
+| `/api/alternatives` | POST | Returns up to three alternative routes labelled by their main road. | GraphHopper Routing |
+| `/api/commute` | POST | Plans a public transport trip. | OpenAI (web search); built-in rail planner |
+| `/api/mapquest` | POST | Analyzes the route with MapQuest and posts the trip summary to Webex. | MapQuest Directions; OpenWeatherMap; Webex Messages |
+| `/api/weather` | GET | Returns departure and arrival weather and a three-hourly forecast. | OpenWeatherMap |
+| `/webex/webhook` | POST | Receives signed Webex bot mentions and replies with a trip summary. | Webex Messages; GraphHopper; MapQuest |
+
+### 3.2 Route Analysis and Notification Flow
+
+1. The user selects an origin and a destination and chooses Metric or English units.
+2. The client sends the trip to `/api/mapquest`.
+3. The server calls the MapQuest route endpoint and validates `info.statuscode`; a non-zero status returns a descriptive error and no Webex message is sent.
+4. On success, the server extracts the distance, travel time, fuel use, toll road and highway flags, and maneuvers, and retrieves the weather at departure and arrival.
+5. The client renders the color-coded summary and directions tables beside the map.
+6. The server posts a Markdown trip summary to the Webex room, truncating very long directions to stay below Webex's 7,439-byte message limit. A failed notification is reported to the user, but it does not prevent the route from being displayed; the panel offers a **Send again** option.
+
+The Webex bot follows a similar flow. Webex sends a signed webhook to `/webex/webhook`; the server verifies the `X-Spark-Signature` HMAC-SHA1 against `WEBEX_WEBHOOK_SECRET`, acknowledges with HTTP `202`, then plans the trip in the background and replies in the question's thread. Messages from bots, including itself, are ignored, and each person may ask five times per minute.
+
+### 3.3 Unit Handling and Fuel Estimation
+
+The MapQuest distance is requested directly in the selected unit, and both unit systems are derived for display so that toggling between them requires no additional API request. Conversions use the exact factors of 1.609344 kilometers per mile and 3.785411784 liters per US gallon. The driving fuel estimate divides the route distance by the user's efficiency (km/L) and multiplies the result by the user's fuel price in PHP. These calculations are kept in `services/converters.py` so that they can be tested in isolation.
+
+## 4. Methodology
+
+### 4.1 Agile Process
+
+The team applied Scrum as described by Schwaber and Sutherland (2020), adapted to the course guidelines with a Scrum Leader and a Recorder. The course instructor acted as the Product Owner. The product backlog was maintained as user stories prioritized with the MoSCoW scheme.
+
+| Sprint | Dates | Sprint Goal |
+|---|---|---|
+| 1 | Nov 13–19, 2026 | Establish the shared codebase and a working MapQuest route call. |
+| 2 | Nov 20–26, 2026 | Deliver the route analyzer interface and automatic Webex notification. |
+| 3 | Nov 27–Dec 3, 2026 | Add trip-planning context and automated quality checks. |
+| 4 | Dec 4–10, 2026 | Stabilize and release. |
+
+Each sprint began with sprint planning, included short daily check-ins, and ended with a sprint review and a retrospective. A backlog item was considered done only when its code had been merged through a reviewed pull request, its tests passed in continuous integration, the change had been checked manually in the browser, and this README had been updated where needed.
+
+### 4.2 Version Control
+
+All development took place in a shared GitHub repository. Each backlog item was developed on its own feature branch (for example, `feature/blue-theme`) and merged into `main` through a pull request reviewed by a member other than the author. Feature branches are retained after merging as a record of the work. The `.gitignore` file excludes `.env`, virtual environments, and Python cache files.
+
+### 4.3 Testing and Continuous Integration
+
+The Python back end is tested with `unittest`, and every external service is replaced with `unittest.mock`, so the tests run without network access and consume no API quota. The suite covers unit conversion, MapQuest response parsing and status-code handling, Webex message formatting and delivery, the Webex bot and webhook signature verification, the rail planner, and the Flask endpoints through Flask's test client. At the time of writing, all 166 Python test cases pass. The browser modules for saved places, trip history, and weather are tested with the Node.js test runner.
+
+The continuous integration pipeline is defined in `.github/workflows/ci.yml` and runs on every push and pull request to `main`. It lints the Python code for syntax errors and undefined names, runs the Python test suite on Python 3.10 through 3.14, checks the syntax of every JavaScript file, and runs the JavaScript tests. A failing job marks the pull request as failed.
+
+## 5. Installation and Usage
+
+### 5.1 Prerequisites
+
+- Git and Python 3.10 or newer (on Windows, include the `py` launcher). Node.js 20 or newer is needed only to run the JavaScript tests.
+- Internet access, since the application calls external APIs and loads map tiles and frontend libraries from public CDNs.
+- The following credentials:
+  - a GraphHopper API key with Geocoding and Routing access (required);
+  - a Mapbox **public** access token beginning with `pk.`, restricted to localhost;
+  - a MapQuest API key for the route analyzer;
+  - a Webex bot access token and room ID for trip summaries, and a random webhook secret for the bot;
+  - an OpenWeatherMap API key (the free plan is sufficient; new keys may take up to two hours to activate);
+  - optionally, an OpenAI API key for Commute mode. Without it, Commute mode uses the built-in LRT/MRT planner.
+
+### 5.2 Setup
+
+Clone the repository and enter the project directory:
+
+```powershell
 git clone https://github.com/joaquinadriano/Maply.git
 cd Maply
 ```
 
-Cloning downloads the source code. Changing into the project directory ensures the following commands find `requirements.txt`, `.env.example`, and `app.py`.
-
-### 3. Create and activate a virtual environment
-
-**Windows PowerShell:**
+Create and activate a virtual environment (Windows PowerShell):
 
 ```powershell
 py -m venv .venv
 .\.venv\Scripts\Activate.ps1
 ```
 
-**macOS / Linux:**
+On macOS or Linux, use `python3 -m venv .venv` followed by `source .venv/bin/activate`.
 
-```sh
-python3 -m venv .venv
-source .venv/bin/activate
-```
+Install the dependencies:
 
-A virtual environment keeps Maply's Python packages separate from system Python and other projects. Activate it again whenever you open a new terminal to work on Maply.
-
-### 4. Install Python dependencies
-
-With the virtual environment active, run:
-
-```sh
+```powershell
 python -m pip install -r requirements.txt
 ```
 
-This installs Flask, Requests, and Python-dotenv, which the server needs to serve the app, contact GraphHopper, and read local configuration.
-
-### 5. Configure API credentials
-
-Copy the example environment file to `.env`:
-
-**Windows PowerShell:**
+Copy the example environment file and replace the placeholder values with your credentials:
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-**macOS / Linux:**
-
-```sh
-cp .env.example .env
-```
-
-Open `.env` in a text editor and replace the placeholder values:
-
 ```dotenv
-GRAPHHOPPER_API_KEY=your_real_graphhopper_key
+GRAPHHOPPER_API_KEY=your_graphhopper_key
 MAPBOX_ACCESS_TOKEN=pk.your_public_mapbox_token
+MAPQUEST_API_KEY=your_mapquest_key
+WEBEX_ACCESS_TOKEN=your_webex_bot_token
+WEBEX_ROOM_ID=your_webex_room_id
+WEBEX_WEBHOOK_SECRET=your_random_secret
+OPENWEATHER_API_KEY=your_openweathermap_key
+OPENAI_API_KEY=your_openai_key
 ```
 
-The GraphHopper key stays on the Flask server and is not sent to the browser. Mapbox GL JS requires its public token in the browser, so use a `pk.` token and restrict it to your local development URL. `.env` is ignored by Git so your credentials are not accidentally committed. Do not put secrets in `.env.example`.
+The `.env` file is ignored by Git. Never place real credentials in `.env.example`.
 
-If the Mapbox token is missing, the server can still calculate routes, but the map displays setup instructions. GraphHopper credentials are required for place search and route calculations.
+### 5.3 Running the Application
 
-### 6. Start Maply
-
-From the project directory with the virtual environment active, run:
-
-```sh
+```powershell
 python app.py
 ```
 
-The Flask development server reads `.env` and listens on localhost at port 5000 by default. Keep this terminal open while using the app; closing it stops the server. To stop it intentionally, press **Ctrl+C**.
+Open [http://127.0.0.1:5000](http://127.0.0.1:5000) in a browser. The server listens on port 5000 unless `PORT` is changed in `.env`. Restart the server after editing `.env`, and press **Ctrl+C** to stop it.
 
-### 7. Open the app
+### 5.4 Webex Bot Setup
 
-In your browser, open [http://127.0.0.1:5000](http://127.0.0.1:5000). This address points to the server running on your own computer and is not a public website. If you change `PORT` in `.env`, use that port in the browser address too. After editing `.env`, restart the server so it loads the new values.
+1. Create a bot at [developer.webex.com/my-apps/new/bot](https://developer.webex.com/my-apps/new/bot), place its token in `WEBEX_ACCESS_TOKEN`, and add the bot to the Webex space.
+2. Generate a webhook secret, for example with `python -c "import secrets; print(secrets.token_hex(24))"`, and place it in `WEBEX_WEBHOOK_SECRET`. Without this secret, the webhook endpoint refuses every request with HTTP `503`.
+3. Expose the local server over HTTPS with a tunnel such as [ngrok](https://ngrok.com/) (`ngrok http 5000`).
+4. Register the webhook with the tunnel's URL, repeating this step whenever the URL changes:
 
-### Troubleshooting
+```powershell
+python scripts/webex_webhook.py register https://your-tunnel.ngrok-free.app
+```
 
-- **`python` or `py` is not recognized:** Install Python and ensure it is on your PATH. On macOS/Linux, use `python3` to create the virtual environment.
-- **`ModuleNotFoundError` on startup:** Activate `.venv` and run `python -m pip install -r requirements.txt` again in the project directory.
-- **Mapbox setup message:** Confirm `.env` contains a valid public `MAPBOX_ACCESS_TOKEN`, then restart Flask. Check that the token's allowed URL includes your local address.
-- **Place search or routing fails:** Confirm the GraphHopper key is set and that the key/account supports the selected profile. The app reports provider errors instead of substituting a different mode.
-- **Port 5000 is already in use:** Set a different `PORT` in `.env`, restart the app, and open `http://127.0.0.1:<port>`.
+The `list` and `delete` subcommands show and remove the webhook. In Webex, the bot is then used as follows:
 
-## API integrations
+```
+@Maply Cubao to Makati
+@Maply Quiapo to BGC, bike
+@Maply UP Diliman to SM Megamall, walk in miles
+@Maply help
+```
 
-- `GET /api/geocode?q=...` requests up to five GraphHopper place suggestions.
-- `POST /api/route` calculates the selected profile route. Returns meter distance, millisecond duration, coordinates, turn-by-turn instructions, and enriched metric/imperial summaries with fuel estimates.
-- `POST /api/compare` queries car, bike, and foot profiles concurrently using Python thread workers, returning profile availability and metrics.
-
-GraphHopper requests are made by the Flask server so the GraphHopper key is not sent to the browser. Mapbox GL JS loads Mapbox Standard in the browser using the public Mapbox token. Requests have connect/read timeouts, input validation, and a per-client in-memory limit of 20 weighted GraphHopper requests per minute (mode comparison counts as three, alternative routes as two, a commute search as two). Commute answers are cached for a day and weather for 10 minutes.
-
-## Testing
-
-Run the unit and endpoint tests with:
+### 5.5 Running the Tests
 
 ```powershell
 python -m unittest discover -s tests -v
 ```
 
-Run the JavaScript tests (saved places and trip history) with Node.js 20 or newer:
-
 ```powershell
 node --test "tests/js/*.test.mjs"
 ```
 
-The tests mock external services and do not consume API credits. A live route search also requires valid GraphHopper credentials and network access.
+### 5.6 Troubleshooting
 
-## Limitations
+- **`python` or `py` is not recognized:** install Python and ensure it is on the `PATH`.
+- **`ModuleNotFoundError` on startup:** activate `.venv` and reinstall the requirements.
+- **The map shows setup instructions:** confirm that `MAPBOX_ACCESS_TOKEN` is a valid public token whose allowed URLs include the local address, then restart the server.
+- **Place search or routing fails:** confirm that the GraphHopper key is set and that the account supports the selected profile.
+- **The MapQuest panel reports that Webex is not set up or the token expired:** set `WEBEX_ACCESS_TOKEN` and `WEBEX_ROOM_ID`, preferably with a bot token, which does not expire.
+- **Port 5000 is already in use:** set a different `PORT` in `.env` and open that port instead.
 
-- The GraphHopper account determines which profiles and geographies are available. The UI displays API errors per profile.
-- Map styles and frontend libraries load from their respective public services; this app does not bundle or proxy those assets.
-- Fuel estimates use route distance and configured average efficiency. They exclude tolls, parking fees, and changing traffic conditions.
-- Recent trips and unit preference live in browser storage on the current browser/device and are not synchronized.
-- A single best route is displayed for the selected profile; GraphHopper alternative-route options are not enabled.
+## 6. Conclusion and Recommendations
+
+Maply met its objectives by replacing the command-line output of Laboratory 4.9.2 with a web-based route analyzer that presents MapQuest results in color-coded tables in the user's preferred unit system, adds weather context, and shares each trip automatically with the team through Webex. The project also showed that the reliability of an integration depends as much on handling the documented failure cases of an API, such as invalid status codes, timeouts, rate limits, and expired tokens, as on processing its successful responses, and that short sprints, reviewed pull requests, and automated tests reinforce one another.
+
+For future development, the team recommends server-side accounts and a database so that saved places and trip history are available across devices; moving secrets to a managed secrets service; containerizing the application and serving it with a production WSGI server behind an HTTPS reverse proxy; extending the pipeline from continuous integration to continuous delivery with automated deployment to a staging environment; caching more API responses to reduce quota usage; and adding automated browser tests for the JavaScript front end.
+
+## References
+
+- Cisco Networking Academy. (n.d.). *DevNet Associate* [Course materials; Lab 4.9.2: Integrate a REST API in a Python application]. Cisco Systems. https://www.netacad.com/
+- Driessen, V. (2010, January 5). *A successful Git branching model*. https://nvie.com/posts/a-successful-git-branching-model/
+- Fielding, R. T. (2000). *Architectural styles and the design of network-based software architectures* [Doctoral dissertation, University of California, Irvine].
+- Fowler, M. (2006). *Continuous integration*. https://martinfowler.com/articles/continuousIntegration.html
+- GraphHopper GmbH. (n.d.). *Plans and rate limits*. https://docs.graphhopper.com/
+- Hanson, T. (2025, April 14). *Rate limiting and the Webex API*. Webex for Developers Blog. https://developer.webex.com/blog/rate-limiting-and-the-webex-api
+- Mapbox. (n.d.). *Mapbox GL JS*. https://docs.mapbox.com/mapbox-gl-js/
+- MapQuest. (n.d.). *Directions API*. https://developer.mapquest.com/documentation/api/directions/
+- Pallets. (n.d.). *Flask documentation*. https://flask.palletsprojects.com/
+- Python Software Foundation. (n.d.). *unittest: Unit testing framework*. https://docs.python.org/3/library/unittest.html
+- Schwaber, K., & Sutherland, J. (2020). *The Scrum guide*. https://scrumguides.org/scrum-guide.html
+- Webex by Cisco. (n.d.). *Webex REST API basics*. https://developer.webex.com/messaging/docs/basics
