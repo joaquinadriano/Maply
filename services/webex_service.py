@@ -15,6 +15,8 @@ MESSAGES_URL = "https://webexapis.com/v1/messages"
 TIMEOUT = (4, 10)
 MANILA = timezone(timedelta(hours=8))  # Philippine time has no daylight saving
 MODE_NAMES = {"car": "Driving", "bike": "Cycling", "foot": "Walking"}
+# Webex rejects messages over 7,439 bytes; keep a margin for anything Webex adds.
+MAX_MESSAGE_BYTES = 7000
 session = requests.Session()
 
 
@@ -53,8 +55,11 @@ def _weather_line(label: str, when_ms: int, reading: dict, english: bool) -> str
     )
 
 
-def build_summary(trip: Trip, unit: str = "metric", weather: dict | None = None, max_steps: int = 10) -> str:
-    """A Markdown trip summary in the chosen unit system ('metric' or 'imperial'), with weather if given."""
+def build_summary(trip: Trip, unit: str = "metric", weather: dict | None = None, max_bytes: int = MAX_MESSAGE_BYTES) -> str:
+    """A Markdown trip summary in the chosen unit system ('metric' or 'imperial'), with weather if given.
+
+    Lists every direction step unless that would make the message longer than `max_bytes`.
+    """
     english = unit == "imperial"
     dist_unit = "mi" if english else "km"
     data = trip.to_dict()
@@ -88,14 +93,21 @@ def build_summary(trip: Trip, unit: str = "metric", weather: dict | None = None,
         lines += [f"- {tip}" for tip in weather.get("advice", [])]
 
     steps = data["maneuvers"]
-    if steps:
-        lines += ["", "**Directions**"]
-        for step in steps[:max_steps]:
-            lines.append(f"{step['number']}. {step['narrative']} ({_distance(step['distance'][dist_unit], dist_unit)})")
-        if len(steps) > max_steps:
-            more = len(steps) - max_steps
-            lines.append(f"_…and {more} more step{'s' if more != 1 else ''}._")
-    return "\n".join(lines)
+    if not steps:
+        return "\n".join(lines)
+    lines += ["", "**Directions**"]
+    step_lines = [f"{step['number']}. {step['narrative']} ({_distance(step['distance'][dist_unit], dist_unit)})" for step in steps]
+
+    def message(shown: int) -> str:
+        more = len(step_lines) - shown
+        tail = [f"_…and {more} more step{'s' if more != 1 else ''}._"] if more else []
+        return "\n".join(lines + step_lines[:shown] + tail)
+
+    # Every step when they fit; only very long trips are cut short to stay under Webex's limit.
+    shown = len(step_lines)
+    while shown > 0 and len(message(shown).encode("utf-8")) > max_bytes:
+        shown -= 1
+    return message(shown)
 
 
 def send_summary(trip: Trip, unit: str = "metric", weather: dict | None = None) -> dict:
@@ -103,11 +115,22 @@ def send_summary(trip: Trip, unit: str = "metric", weather: dict | None = None) 
     token, room = settings()
     if not (token and room):
         return {"sent": False, "message": "Webex is not set up. Add WEBEX_ACCESS_TOKEN and WEBEX_ROOM_ID to .env."}
+    return post_markdown(room, build_summary(trip, unit, weather))
+
+
+def post_markdown(room: str, markdown: str, parent_id: str | None = None) -> dict:
+    """Post a Markdown message (optionally as a threaded reply). Never raises."""
+    token = settings()[0]
+    if not token:
+        return {"sent": False, "message": "Webex is not set up. Add WEBEX_ACCESS_TOKEN to .env."}
+    payload = {"roomId": room, "markdown": markdown}
+    if parent_id:
+        payload["parentId"] = parent_id
     try:
         response = session.post(
             MESSAGES_URL,
             headers={"Authorization": f"Bearer {token}"},
-            json={"roomId": room, "markdown": build_summary(trip, unit, weather)},
+            json=payload,
             timeout=TIMEOUT,
         )
     except requests.RequestException:

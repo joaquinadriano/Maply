@@ -125,9 +125,29 @@ class WebexTests(unittest.TestCase):
         self.assertIn("16.1 km", text)
         self.assertIn("1.89 L", text)
 
-    def test_summary_truncates_long_directions(self):
-        text = webex.build_summary(self.trip, max_steps=1)
-        self.assertIn("1 more step", text)
+    def long_trip(self, steps):
+        sample = {**SAMPLE, "route": {**SAMPLE["route"], "legs": [{"maneuvers": [
+            {"narrative": f"Turn left onto Example Street number {n}.", "distance": 0.4, "time": 30} for n in range(steps)
+        ]}]}}
+        return mq.parse_route(sample, "Cubao", "Makati", "car")
+
+    def test_summary_lists_every_step_when_it_fits(self):
+        text = webex.build_summary(self.long_trip(40))
+        self.assertIn("40. Turn left onto Example Street number 39. (0.4 km)", text)
+        self.assertNotIn("more step", text)
+
+    def test_summary_cuts_steps_only_to_stay_under_the_limit(self):
+        text = webex.build_summary(self.long_trip(300))
+        self.assertLessEqual(len(text.encode("utf-8")), webex.MAX_MESSAGE_BYTES)
+        self.assertRegex(text, r"_…and \d+ more steps\._$")
+        self.assertIn("1. Turn left", text)
+
+    def test_summary_truncates_to_a_custom_size(self):
+        full = webex.build_summary(self.trip)
+        text = webex.build_summary(self.trip, max_bytes=len(full.encode("utf-8")) - 1)
+        self.assertIn("1. Head south on EDSA.", text)
+        self.assertNotIn("2. Turn right", text)
+        self.assertTrue(text.endswith("_…and 1 more step._"))
 
     def test_not_configured(self):
         with mock.patch.dict("os.environ", {"WEBEX_ACCESS_TOKEN": "", "WEBEX_ROOM_ID": ""}):

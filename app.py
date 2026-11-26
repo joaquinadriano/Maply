@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template
 
 from routes.api import api
+from routes.webex import webex
 
 load_dotenv()
 
@@ -14,6 +15,7 @@ def create_app() -> Flask:
     app = Flask(__name__)
     app.config["MAX_CONTENT_LENGTH"] = 32 * 1024
     app.register_blueprint(api)
+    app.register_blueprint(webex)
 
     @app.get("/")
     def index():
